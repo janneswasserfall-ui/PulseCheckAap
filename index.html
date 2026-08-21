@@ -1,0 +1,1398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Pulse Check</title>
+<style>
+  :root{
+    --bg-deep:#10151a;
+    --bg-panel:#1a2129;
+    --bg-panel-alt:#212b34;
+    --trace-green:#3ddc84;
+    --trace-green-dim:rgba(61,220,132,0.14);
+    --pulse-coral:#ff6b6b;
+    --amber-warn:#ffb84d;
+    --ink:#e7edf0;
+    --ink-dim:#7c8790;
+    --border-glass:rgba(61,220,132,0.20);
+    --font-display:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;
+    --font-mono:'SF Mono','SFMono-Regular','Roboto Mono',Consolas,'Liberation Mono',Menlo,monospace;
+    --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px; --sp-7:48px;
+  }
+  *,*::before,*::after{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg-deep);}
+  body{
+    font-family:var(--font-display);
+    color:var(--ink);
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+    padding:20px 12px 48px;
+    -webkit-font-smoothing:antialiased;
+  }
+  button{font-family:inherit;}
+  input{font-family:inherit;}
+
+  .device{
+    width:100%;
+    max-width:440px;
+    background:linear-gradient(180deg,#151c22,#10151a);
+    border-radius:22px;
+    border:1px solid #262f38;
+    box-shadow:0 30px 60px -20px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.03);
+    overflow:hidden;
+    position:relative;
+  }
+
+  /* ---------- Global header ---------- */
+  .global-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:14px 18px 10px;
+    border-bottom:1px solid #1f2830;
+  }
+  .volume-control{display:flex;align-items:center;gap:8px;}
+  .vol-icon{font-size:0.95rem;opacity:0.75;}
+  #volume-slider{
+    -webkit-appearance:none;
+    appearance:none;
+    width:64px;height:3px;
+    background:#2a333c;
+    border-radius:2px;
+    outline:none;
+  }
+  #volume-slider::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    width:12px;height:12px;border-radius:50%;
+    background:var(--trace-green);
+    cursor:pointer;
+    box-shadow:0 0 6px rgba(61,220,132,0.6);
+  }
+  #volume-slider::-moz-range-thumb{
+    width:12px;height:12px;border-radius:50%;border:none;
+    background:var(--trace-green);cursor:pointer;
+  }
+  .level-pill{
+    display:flex;align-items:center;gap:8px;
+    font-family:var(--font-mono);
+    font-size:0.72rem;
+    color:var(--ink-dim);
+  }
+  .level-pill .level-num{color:var(--amber-warn);font-weight:700;}
+  .level-track{
+    width:46px;height:4px;background:#2a333c;border-radius:2px;overflow:hidden;
+  }
+  .level-fill{height:100%;background:var(--amber-warn);width:0%;transition:width .4s ease;}
+
+  /* ---------- Screens ---------- */
+  .screen{display:none;padding:22px 22px 26px;}
+  .screen.active{display:block;animation:fadeIn .35s ease;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+
+  .eyebrow{
+    font-family:var(--font-mono);
+    font-size:0.68rem;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color:var(--trace-green);
+    margin:0 0 6px;
+  }
+
+  /* ---------- Home ---------- */
+  .home-title{
+    font-size:1.9rem;
+    font-weight:800;
+    letter-spacing:-0.01em;
+    margin:0 0 4px;
+  }
+  .home-tagline{
+    color:var(--ink-dim);
+    font-size:0.92rem;
+    margin:0 0 18px;
+    line-height:1.5;
+  }
+  .stat-strip{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:8px;
+    margin-bottom:26px;
+  }
+  .stat-pill{
+    background:var(--bg-panel);
+    border:1px solid #232c35;
+    border-radius:10px;
+    padding:10px 4px;
+    text-align:center;
+  }
+  .stat-pill .stat-value{
+    display:block;
+    font-family:var(--font-mono);
+    font-size:1.05rem;
+    font-weight:700;
+    color:var(--ink);
+  }
+  .stat-pill .stat-label{
+    display:block;
+    font-size:0.62rem;
+    color:var(--ink-dim);
+    margin-top:2px;
+    letter-spacing:0.02em;
+  }
+  .section-label{
+    font-size:0.78rem;
+    font-weight:700;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    color:var(--ink-dim);
+    margin:0 0 12px;
+  }
+  .difficulty-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+    margin-bottom:20px;
+  }
+  .difficulty-card{
+    background:var(--bg-panel);
+    border:1px solid #232c35;
+    border-radius:12px;
+    padding:14px 12px;
+    text-align:left;
+    cursor:pointer;
+    color:var(--ink);
+    transition:border-color .15s ease, transform .1s ease;
+  }
+  .difficulty-card:hover{border-color:var(--border-glass);}
+  .difficulty-card:active{transform:scale(0.98);}
+  .diff-icon{font-size:1.3rem;margin-bottom:6px;}
+  .diff-name{font-weight:700;font-size:0.92rem;margin-bottom:2px;}
+  .diff-time{
+    font-family:var(--font-mono);
+    font-size:0.74rem;
+    color:var(--trace-green);
+    margin-bottom:6px;
+  }
+  .diff-stat{font-size:0.68rem;color:var(--ink-dim);}
+  .difficulty-card--wide{grid-column:1 / -1;}
+  .diff-subtitle{font-size:0.68rem;color:var(--pulse-coral);font-weight:700;margin-bottom:4px;}
+
+  .btn-ghost{
+    display:block;
+    width:100%;
+    background:transparent;
+    border:1px solid #262f38;
+    color:var(--ink-dim);
+    border-radius:10px;
+    padding:12px;
+    font-size:0.85rem;
+    font-weight:600;
+    cursor:pointer;
+    transition:border-color .15s ease, color .15s ease;
+  }
+  .btn-ghost:hover{border-color:var(--trace-green);color:var(--ink);}
+
+  .footer-note{
+    margin-top:18px;
+    font-size:0.66rem;
+    color:#4a545d;
+    text-align:center;
+    line-height:1.5;
+  }
+
+  .btn-primary{
+    display:block;
+    width:100%;
+    background:var(--pulse-coral);
+    border:none;
+    color:#1a0d0d;
+    border-radius:10px;
+    padding:14px;
+    font-size:0.95rem;
+    font-weight:800;
+    cursor:pointer;
+    transition:transform .1s ease, box-shadow .15s ease;
+    box-shadow:0 8px 20px -8px rgba(255,107,107,0.5);
+  }
+  .btn-primary:hover{box-shadow:0 10px 24px -6px rgba(255,107,107,0.65);}
+  .btn-primary:active{transform:scale(0.98);}
+
+  /* ---------- Case intro ---------- */
+  .case-card{
+    background:var(--bg-panel);
+    border:1px solid #232c35;
+    border-radius:14px;
+    padding:28px 20px;
+    text-align:center;
+    margin-bottom:20px;
+  }
+  .case-icon{font-size:2.6rem;margin-bottom:10px;}
+  .case-card h2{margin:0 0 2px;font-size:1.3rem;}
+  .case-species{color:var(--ink-dim);font-size:0.85rem;margin:0 0 16px;}
+  .case-difficulty{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    background:var(--bg-panel-alt);
+    border-radius:20px;
+    padding:6px 14px;
+    font-size:0.76rem;
+    font-family:var(--font-mono);
+    color:var(--trace-green);
+  }
+  .intro-actions{display:flex;flex-direction:column;gap:10px;}
+
+  /* ---------- Listening ---------- */
+  .listening-case-label{
+    text-align:center;
+    color:var(--ink-dim);
+    font-size:0.82rem;
+    margin-bottom:14px;
+  }
+  .listening-case-label strong{color:var(--ink);}
+
+  .monitor-screen{
+    position:relative;
+    height:104px;
+    border-radius:10px;
+    background-color:#0b1a13;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(61,220,132,0.09) 0 1px, transparent 1px 18px),
+      repeating-linear-gradient(90deg, rgba(61,220,132,0.09) 0 1px, transparent 1px 18px);
+    overflow:hidden;
+    box-shadow:inset 0 0 26px rgba(0,0,0,0.65), inset 0 0 0 1px var(--border-glass);
+    margin-bottom:16px;
+  }
+  .monitor-trace-wrap{position:absolute;inset:0;overflow:hidden;}
+  .monitor-trace{width:200%;height:100%;display:block;animation:traceScroll 5s linear infinite;}
+  @keyframes traceScroll{from{transform:translateX(0);}to{transform:translateX(-50%);}}
+  .trace-line{fill:none;stroke:var(--trace-green);stroke-width:2;filter:drop-shadow(0 0 3px rgba(61,220,132,0.8));}
+
+  .precountdown{
+    position:absolute;inset:0;
+    display:flex;align-items:center;justify-content:center;
+    background:#0b1a13;
+    font-family:var(--font-mono);
+    font-size:3rem;font-weight:700;
+    color:var(--trace-green);
+    z-index:2;
+  }
+
+  .timer-display{
+    font-family:var(--font-mono);
+    font-size:2.6rem;
+    font-weight:700;
+    text-align:center;
+    color:var(--trace-green);
+    text-shadow:0 0 14px rgba(61,220,132,0.45);
+    margin-bottom:6px;
+    letter-spacing:0.01em;
+    transition:color .3s ease;
+  }
+  .timer-display.urgent{color:var(--pulse-coral);text-shadow:0 0 14px rgba(255,107,107,0.55);}
+
+  .progress-track{
+    height:5px;background:#20292f;border-radius:3px;overflow:hidden;margin-bottom:22px;
+  }
+  .progress-fill{height:100%;background:var(--trace-green);width:100%;}
+
+  .guess-input-row{margin-bottom:14px;}
+  .guess-input-row label{
+    display:block;font-size:0.72rem;letter-spacing:0.06em;text-transform:uppercase;
+    color:var(--ink-dim);margin-bottom:8px;text-align:center;
+  }
+  #bpm-input{
+    display:block;
+    width:100%;
+    background:var(--bg-panel);
+    border:1px solid #232c35;
+    border-radius:10px;
+    color:var(--ink);
+    font-family:var(--font-mono);
+    font-size:2.1rem;
+    font-weight:700;
+    text-align:center;
+    padding:14px 10px;
+    outline:none;
+    transition:border-color .15s ease;
+  }
+  #bpm-input:focus{border-color:var(--trace-green);}
+  #bpm-input.shake{animation:shake .35s ease;border-color:var(--pulse-coral);}
+  @keyframes shake{
+    0%,100%{transform:translateX(0);}
+    20%{transform:translateX(-6px);}
+    40%{transform:translateX(6px);}
+    60%{transform:translateX(-4px);}
+    80%{transform:translateX(4px);}
+  }
+  .input-hint{
+    text-align:center;font-size:0.7rem;color:var(--pulse-coral);
+    min-height:14px;margin:6px 0 12px;
+  }
+  .time-up-banner{
+    display:none;
+    background:rgba(255,184,77,0.12);
+    border:1px solid rgba(255,184,77,0.35);
+    color:var(--amber-warn);
+    font-size:0.78rem;
+    border-radius:8px;
+    padding:8px 12px;
+    text-align:center;
+    margin-bottom:12px;
+  }
+
+  .finding-select-row{margin-bottom:14px;}
+  .finding-select-row label{
+    display:block;font-size:0.72rem;letter-spacing:0.06em;text-transform:uppercase;
+    color:var(--ink-dim);margin-bottom:8px;text-align:center;
+  }
+  .finding-options{display:flex;flex-direction:column;gap:6px;}
+  .finding-option{
+    display:flex;align-items:center;gap:10px;
+    background:var(--bg-panel);border:1px solid #232c35;border-radius:10px;
+    padding:10px 12px;font-size:0.78rem;color:var(--ink-dim);
+    cursor:pointer;transition:border-color .15s ease, color .15s ease, background .15s ease;
+  }
+  .finding-option:hover{border-color:var(--border-glass);}
+  .finding-option.selected{
+    border-color:var(--trace-green);color:var(--ink);background:var(--trace-green-dim);
+  }
+
+  /* ---------- Results ---------- */
+  .result-badge{font-size:2.6rem;text-align:center;margin-bottom:6px;}
+  #result-message{text-align:center;margin:0 0 20px;font-size:1.15rem;}
+  .result-numbers{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px;
+  }
+  .result-box{
+    background:var(--bg-panel);border:1px solid #232c35;border-radius:10px;
+    padding:10px 6px;text-align:center;
+  }
+  .result-box .label{display:block;font-size:0.62rem;color:var(--ink-dim);margin-bottom:4px;letter-spacing:0.03em;}
+  .result-box .value{display:block;font-family:var(--font-mono);font-size:1.15rem;font-weight:700;}
+
+  .finding-result{
+    display:none;
+    border-radius:10px;
+    padding:10px 14px;
+    margin-bottom:18px;
+    font-size:0.82rem;
+    text-align:center;
+    border:1px solid;
+    line-height:1.4;
+  }
+  .finding-result.correct{ background:rgba(61,220,132,0.10); border-color:rgba(61,220,132,0.35); color:var(--trace-green); }
+  .finding-result.incorrect{ background:rgba(255,107,107,0.10); border-color:rgba(255,107,107,0.35); color:var(--pulse-coral); }
+
+  .accuracy-meter{margin-bottom:18px;}
+  .accuracy-track{
+    height:14px;background:#181f26;border-radius:8px;overflow:hidden;
+    border:1px solid #232c35;margin-bottom:6px;
+  }
+  .accuracy-fill{height:100%;width:0%;transition:width .6s cubic-bezier(.2,.9,.3,1);}
+  #accuracy-label{
+    display:block;text-align:center;font-family:var(--font-mono);font-size:0.85rem;color:var(--ink-dim);
+  }
+  .xp-gain{
+    text-align:center;font-family:var(--font-mono);font-weight:700;color:var(--amber-warn);
+    font-size:1rem;margin-bottom:4px;
+  }
+  .streak-display{
+    display:none;text-align:center;color:var(--pulse-coral);font-weight:700;font-size:0.9rem;margin-bottom:16px;
+  }
+  .results-actions{display:flex;flex-direction:column;gap:10px;}
+
+  /* ---------- Stats screen ---------- */
+  #screen-stats h2{font-size:1.3rem;margin:0 0 16px;}
+  #screen-stats h3{
+    font-size:0.78rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-dim);
+    margin:24px 0 12px;
+  }
+  .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .big-stat{
+    grid-column:span 1;
+    background:var(--bg-panel);border:1px solid #232c35;border-radius:12px;
+    padding:16px 10px;text-align:center;
+  }
+  .big-stat .big-value{
+    display:block;font-family:var(--font-mono);font-size:1.5rem;font-weight:800;color:var(--trace-green);
+  }
+  .big-stat span:last-child{font-size:0.68rem;color:var(--ink-dim);}
+  .diff-stat-row{
+    grid-column:span 2;
+    display:flex;justify-content:space-between;
+    background:var(--bg-panel);border:1px solid #232c35;border-radius:10px;
+    padding:10px 14px;font-size:0.78rem;color:var(--ink-dim);
+  }
+  .diff-stat-row + .diff-stat-row{margin-top:6px;}
+
+  .trend-chart{
+    display:flex;align-items:flex-end;gap:4px;height:70px;
+    background:var(--bg-panel);border:1px solid #232c35;border-radius:10px;padding:10px;
+  }
+  .trend-bar{flex:1;border-radius:3px 3px 0 0;min-height:3px;}
+  .empty-state{color:var(--ink-dim);font-size:0.82rem;text-align:center;padding:14px 0;}
+
+  .history-list{display:flex;flex-direction:column;gap:6px;}
+  .history-row{
+    display:flex;justify-content:space-between;align-items:center;gap:8px;
+    background:var(--bg-panel);border:1px solid #232c35;border-radius:8px;
+    padding:9px 12px;font-size:0.74rem;color:var(--ink-dim);
+  }
+  .history-row .history-who{color:var(--ink);}
+  .history-accuracy{font-family:var(--font-mono);font-weight:700;}
+
+  .badges-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+  .badge-cell{
+    background:var(--bg-panel);border:1px solid #232c35;border-radius:10px;
+    padding:10px 4px;text-align:center;
+  }
+  .badge-cell.locked{opacity:0.4;}
+  .badge-icon{font-size:1.3rem;margin-bottom:4px;}
+  .badge-name{font-size:0.6rem;font-weight:700;margin-bottom:2px;}
+  .badge-desc{font-size:0.54rem;color:var(--ink-dim);line-height:1.3;}
+
+  /* ---------- Toast ---------- */
+  .toast{
+    position:fixed;top:18px;left:50%;
+    transform:translate(-50%,-140%);
+    background:var(--bg-panel-alt);
+    border:1px solid var(--amber-warn);
+    border-radius:12px;
+    padding:12px 18px;
+    display:flex;align-items:center;gap:10px;
+    box-shadow:0 10px 30px rgba(0,0,0,0.5);
+    z-index:1000;
+    transition:transform .4s cubic-bezier(.2,.9,.3,1);
+    max-width:90vw;
+  }
+  .toast.show{transform:translate(-50%,0);}
+  .toast-icon{font-size:1.5rem;}
+  .toast-text{font-size:0.78rem;line-height:1.4;}
+
+  /* ---------- Confetti ---------- */
+  .confetti-container{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:999;overflow:hidden;}
+  .confetti-piece{position:absolute;top:-10px;width:7px;height:12px;opacity:0.9;animation:confettiFall 1.7s ease-in forwards;}
+  @keyframes confettiFall{to{transform:translateY(110vh) rotate(360deg);opacity:0.2;}}
+
+  /* ---------- Accessibility ---------- */
+  button:focus-visible, input:focus-visible{
+    outline:2px solid var(--trace-green);outline-offset:2px;
+  }
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{
+      animation-duration:0.01ms !important;
+      animation-iteration-count:1 !important;
+      transition-duration:0.01ms !important;
+    }
+  }
+  @media (max-width:360px){
+    .difficulty-grid{grid-template-columns:1fr;}
+    .badges-grid{grid-template-columns:repeat(2,1fr);}
+  }
+</style>
+</head>
+<body>
+<div class="device" id="app">
+
+  <div class="global-header">
+    <div class="volume-control">
+      <span class="vol-icon">&#128266;</span>
+      <input type="range" id="volume-slider" min="0" max="1" step="0.05" value="0.7" aria-label="Volume">
+    </div>
+    <div class="level-pill">
+      <span>LV <span class="level-num" id="level-num">1</span></span>
+      <span class="level-track"><span class="level-fill" id="level-fill"></span></span>
+    </div>
+  </div>
+
+  <!-- HOME -->
+  <section class="screen active" id="screen-home">
+    <p class="eyebrow">Auscultation Trainer</p>
+    <h1 class="home-title">Pulse Check</h1>
+    <p class="home-tagline">Train your ear. Trust your gut. Every clinician learns to estimate heart rate before the monitor confirms it — this is where you practice that instinct.</p>
+
+    <div class="stat-strip" id="home-stats"></div>
+
+    <p class="section-label">Choose your round</p>
+    <div class="difficulty-grid" id="difficulty-grid"></div>
+
+    <button class="btn-ghost" id="btn-view-stats">View full stats</button>
+    <p class="footer-note">Species BPM ranges and pathological sounds are illustrative training approximations, not clinical reference values.</p>
+  </section>
+
+  <!-- CASE INTRO -->
+  <section class="screen" id="screen-intro">
+    <p class="eyebrow">Next case</p>
+    <div class="case-card" id="case-card"></div>
+    <div class="intro-actions">
+      <button class="btn-primary" id="btn-start-listening">Start listening</button>
+      <button class="btn-ghost" id="btn-intro-back">Choose a different round</button>
+    </div>
+  </section>
+
+  <!-- LISTENING -->
+  <section class="screen" id="screen-listening">
+    <p class="listening-case-label" id="listening-case-label"></p>
+
+    <div class="monitor-screen" id="monitor-screen">
+      <div class="monitor-trace-wrap">
+        <svg class="monitor-trace" viewBox="0 0 800 100" preserveAspectRatio="none">
+          <polyline class="trace-line" id="trace-line" points=""/>
+        </svg>
+      </div>
+      <div class="precountdown" id="precountdown"></div>
+    </div>
+
+    <div class="timer-display" id="timer-display">0.0s</div>
+    <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+
+    <div class="time-up-banner" id="time-up-banner">Time's up — lock in your best guess below.</div>
+
+    <div class="guess-input-row">
+      <label for="bpm-input">Your guess (BPM)</label>
+      <input type="number" id="bpm-input" inputmode="numeric" min="1" max="400" placeholder="e.g. 92">
+    </div>
+
+    <div class="finding-select-row" id="finding-select-row" style="display:none;">
+      <label>What do you hear?</label>
+      <div class="finding-options" id="finding-options"></div>
+    </div>
+
+    <p class="input-hint" id="input-hint"></p>
+    <button class="btn-primary" id="btn-lock-guess">Lock in guess</button>
+  </section>
+
+  <!-- RESULTS -->
+  <section class="screen" id="screen-results">
+    <div class="result-badge" id="result-badge"></div>
+    <h2 id="result-message"></h2>
+
+    <div class="result-numbers">
+      <div class="result-box"><span class="label">Your guess</span><span class="value" id="result-guess"></span></div>
+      <div class="result-box"><span class="label">Actual BPM</span><span class="value" id="result-actual"></span></div>
+      <div class="result-box"><span class="label">Off by</span><span class="value" id="result-diff"></span></div>
+    </div>
+
+    <div class="finding-result" id="finding-result"></div>
+
+    <div class="accuracy-meter">
+      <div class="accuracy-track"><div class="accuracy-fill" id="accuracy-fill"></div></div>
+      <span id="accuracy-label"></span>
+    </div>
+
+    <p class="xp-gain" id="xp-gain"></p>
+    <p class="streak-display" id="streak-display"></p>
+
+    <div class="results-actions">
+      <button class="btn-primary" id="btn-next-round">Next case</button>
+      <button class="btn-ghost" id="btn-change-difficulty">Change difficulty</button>
+    </div>
+  </section>
+
+  <!-- STATS -->
+  <section class="screen" id="screen-stats">
+    <h2>Your progress</h2>
+    <div class="stats-grid" id="stats-grid"></div>
+
+    <h3>Recent trend</h3>
+    <div class="trend-chart" id="trend-chart"></div>
+
+    <h3>Recent rounds</h3>
+    <div class="history-list" id="history-list"></div>
+
+    <h3>Badges</h3>
+    <div class="badges-grid" id="badges-grid"></div>
+
+    <div style="margin-top:22px;">
+      <button class="btn-ghost" id="btn-back-home">Back</button>
+    </div>
+  </section>
+
+</div>
+
+<div class="toast" id="badge-toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ================= CONSTANTS ================= */
+
+  var DIFFICULTIES = {
+    intern:     { label:'Intern',            duration:120, multiplier:1.0, icon:'\u{1F393}' },
+    associate:  { label:'Associate Vet',     duration:45,  multiplier:1.3, icon:'\u{1FA7A}' },
+    senior:     { label:'Senior Clinician',  duration:20,  multiplier:1.7, icon:'\u2695\uFE0F' },
+    chief:      { label:'Chief of Medicine', duration:10,  multiplier:2.2, icon:'\u{1F3C6}' },
+    specialist: { label:'Specialist',        duration:15,  multiplier:2.6, icon:'\u{1F52C}' }
+  };
+  var DIFFICULTY_ORDER = ['intern','associate','senior','chief','specialist'];
+
+  var FINDINGS = {
+    normal:           { label:'Normal sinus rhythm',           icon:'\u2705' },
+    systolic_murmur:  { label:'Systolic murmur',                icon:'\u3030\uFE0F' },
+    diastolic_murmur: { label:'Diastolic murmur',               icon:'\u{1F30A}' },
+    gallop:           { label:'Gallop rhythm (S3/S4)',          icon:'\u{1F3B5}' },
+    arrhythmia:       { label:'Irregular rhythm (arrhythmia)',  icon:'\u26A1' }
+  };
+  var FINDING_ORDER = ['normal','systolic_murmur','diastolic_murmur','gallop','arrhythmia'];
+  var FINDING_XP_BONUS = 50;
+
+  var PATIENTS = [
+    { species:'Chihuahua',      icon:'\u{1F415}', minBPM:100, maxBPM:160, names:['Bella','Peanut','Coco','Chico'] },
+    { species:'Labrador',       icon:'\u{1F415}', minBPM:70,  maxBPM:120, names:['Buddy','Duke','Rosie','Bailey'] },
+    { species:'Great Dane',     icon:'\u{1F415}', minBPM:60,  maxBPM:90,  names:['Zeus','Apollo','Tiny'] },
+    { species:'Domestic Cat',   icon:'\u{1F408}', minBPM:140, maxBPM:220, names:['Whiskers','Luna','Milo','Simba'] },
+    { species:'Horse',          icon:'\u{1F40E}', minBPM:28,  maxBPM:44,  names:['Thunder','Star','Rocky'] },
+    { species:'Cow',            icon:'\u{1F404}', minBPM:48,  maxBPM:84,  names:['Daisy','Bessie','Clover'] },
+    { species:'Goat',           icon:'\u{1F410}', minBPM:70,  maxBPM:90,  names:['Billy','Nanny','Pepper'] },
+    { species:'Rabbit',         icon:'\u{1F430}', minBPM:160, maxBPM:250, names:['Thumper','Snowball','Biscuit'] }
+  ];
+
+  var BADGES = {
+    first_beat:   { name:'First Beat',    icon:'\u2764\uFE0F', desc:'Completed your first round' },
+    perfect_pulse:{ name:'Perfect Pulse', icon:'\u{1F3AF}', desc:'Guessed within 1 BPM' },
+    golden_ear:   { name:'Golden Ear',    icon:'\u{1F442}', desc:'95%+ accuracy on a round' },
+    on_a_roll:    { name:'On a Roll',     icon:'\u{1F525}', desc:'5-round accuracy streak' },
+    iron_streak:  { name:'Iron Streak',   icon:'\u26A1', desc:'10-round accuracy streak' },
+    century_club: { name:'Century Club',  icon:'\u{1F4AF}', desc:'Played 100 rounds' },
+    speed_demon:  { name:'Speed Demon',   icon:'\u{1F680}', desc:'90%+ at Chief difficulty' },
+    well_rounded: { name:'Well-Rounded',  icon:'\u{1F31F}', desc:'Played every difficulty' },
+    diagnostician:{ name:'Diagnostician', icon:'\u{1F9E0}', desc:'Correctly ID 10 pathological findings' }
+  };
+  var BADGE_ORDER = ['first_beat','perfect_pulse','golden_ear','on_a_roll','iron_streak','century_club','speed_demon','well_rounded','diagnostician'];
+
+  var STORAGE_KEY = 'pulsecheck-player-data-v1';
+  var LEVEL_XP = 300;
+  var STREAK_THRESHOLD = 80;
+
+  /* ================= STATE ================= */
+
+  var playerData = null;
+  var currentCase = null;
+  var currentDifficultyKey = null;
+  var hasSubmitted = false;
+  var currentVolume = 0.7;
+  var selectedFinding = null;
+
+  var audioCtx = null;
+  var masterGain = null;
+  var noiseBufferLong = null;
+  var noiseBufferShort = null;
+  var scheduledNodes = [];
+
+  var countdownRAF = null;
+  var listeningTimeoutId = null;
+  var volumeSaveTimeout = null;
+
+  /* ================= STORAGE ================= */
+
+  function getDefaultPlayerData(){
+    var perDifficulty = {};
+    DIFFICULTY_ORDER.forEach(function(k){ perDifficulty[k] = { played:0, accuracySum:0 }; });
+    return {
+      volume:0.7,
+      gamesPlayed:0,
+      totalAccuracySum:0,
+      totalAbsDiffSum:0,
+      bestStreak:0,
+      currentStreak:0,
+      xp:0,
+      badges:[],
+      history:[],
+      perDifficulty:perDifficulty,
+      findingStats:{ attempted:0, correct:0 }
+    };
+  }
+
+  function loadPlayerData(){
+    return window.storage.get(STORAGE_KEY).then(function(result){
+      var defaults = getDefaultPlayerData();
+      if (result && result.value){
+        try {
+          var parsed = JSON.parse(result.value);
+          var merged = Object.assign({}, defaults, parsed);
+          merged.perDifficulty = Object.assign({}, defaults.perDifficulty, parsed.perDifficulty||{});
+          merged.findingStats = Object.assign({}, defaults.findingStats, parsed.findingStats||{});
+          return merged;
+        } catch(e){ return defaults; }
+      }
+      return defaults;
+    }).catch(function(){
+      return getDefaultPlayerData();
+    });
+  }
+
+  function savePlayerData(data){
+    return window.storage.set(STORAGE_KEY, JSON.stringify(data)).catch(function(e){
+      console.error('Failed to save player data', e);
+    });
+  }
+
+  /* ================= AUDIO ENGINE ================= */
+
+  function ensureAudioContext(){
+    if (!audioCtx){
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended'){ audioCtx.resume(); }
+    ensureMasterGain();
+    if (!noiseBufferLong){
+      noiseBufferLong = makeNoiseBuffer(audioCtx, 0.16);
+      noiseBufferShort = makeNoiseBuffer(audioCtx, 0.11);
+    }
+    return audioCtx;
+  }
+
+  function ensureMasterGain(){
+    if (!masterGain){
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = currentVolume;
+      masterGain.connect(audioCtx.destination);
+    }
+  }
+
+  function makeNoiseBuffer(ctx, duration){
+    var size = Math.ceil(ctx.sampleRate * duration);
+    var buffer = ctx.createBuffer(1, size, ctx.sampleRate);
+    var data = buffer.getChannelData(0);
+    for (var i=0;i<size;i++){ data[i] = Math.random()*2-1; }
+    return buffer;
+  }
+
+  function createThump(ctx, time, opts){
+    var osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(opts.freq, time);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(opts.freq*0.55,20), time+opts.duration);
+    var oscGain = ctx.createGain();
+    oscGain.gain.setValueAtTime(0.0001, time);
+    oscGain.gain.exponentialRampToValueAtTime(opts.gain, time+0.01);
+    oscGain.gain.exponentialRampToValueAtTime(0.0001, time+opts.duration);
+    osc.connect(oscGain);
+    oscGain.connect(masterGain);
+    osc.start(time);
+    osc.stop(time+opts.duration+0.02);
+    scheduledNodes.push(osc);
+
+    var noiseSrc = ctx.createBufferSource();
+    noiseSrc.buffer = opts.noiseBuffer;
+    var filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = opts.filterFreq;
+    var noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.0001, time);
+    noiseGain.gain.exponentialRampToValueAtTime(opts.gain*0.55, time+0.008);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, time+opts.duration);
+    noiseSrc.connect(filter);
+    filter.connect(noiseGain);
+    noiseGain.connect(masterGain);
+    noiseSrc.start(time);
+    noiseSrc.stop(time+opts.duration+0.02);
+    scheduledNodes.push(noiseSrc);
+  }
+
+  function scheduleLubDub(ctx, time, cycleLength){
+    createThump(ctx, time, {freq:58, duration:0.15, gain:0.55, noiseBuffer:noiseBufferLong, filterFreq:220});
+    var s2Time = time + Math.min(cycleLength*0.32, cycleLength-0.05);
+    createThump(ctx, s2Time, {freq:92, duration:0.10, gain:0.34, noiseBuffer:noiseBufferShort, filterFreq:340});
+    return s2Time;
+  }
+
+  function createMurmur(ctx, time, duration, gain, filterFreq){
+    if (duration <= 0.03) return;
+    var buffer = makeNoiseBuffer(ctx, duration);
+    var noiseSrc = ctx.createBufferSource();
+    noiseSrc.buffer = buffer;
+    var filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = filterFreq;
+    filter.Q.value = 0.6;
+    var noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.0001, time);
+    noiseGain.gain.exponentialRampToValueAtTime(gain, time+duration*0.35);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, time+duration);
+    noiseSrc.connect(filter);
+    filter.connect(noiseGain);
+    noiseGain.connect(masterGain);
+    noiseSrc.start(time);
+    noiseSrc.stop(time+duration+0.02);
+    scheduledNodes.push(noiseSrc);
+  }
+
+  function scheduleBeat(ctx, time, cycleLength, finding){
+    var s2Time = scheduleLubDub(ctx, time, cycleLength);
+
+    if (finding === 'systolic_murmur'){
+      var mStart = time + 0.055;
+      var mDur = Math.max(0, s2Time - mStart - 0.02);
+      createMurmur(ctx, mStart, mDur, 0.24, 480);
+    } else if (finding === 'diastolic_murmur'){
+      var dStart = s2Time + 0.11;
+      var dEnd = time + cycleLength - 0.04;
+      createMurmur(ctx, dStart, Math.max(0, dEnd-dStart), 0.20, 300);
+    } else if (finding === 'gallop'){
+      var maxS3 = (time+cycleLength-0.05) - s2Time;
+      var s3Time = s2Time + Math.min(cycleLength*0.18, Math.max(0.05, maxS3));
+      createThump(ctx, s3Time, {freq:42, duration:0.09, gain:0.20, noiseBuffer:noiseBufferShort, filterFreq:140});
+    }
+  }
+
+  function scheduleHeartbeats(bpm, duration, startAt, finding){
+    var baseCycle = 60/bpm;
+    var t = 0;
+    var time = startAt;
+    while (t < duration){
+      var cycleLength = baseCycle;
+      if (finding === 'arrhythmia'){
+        cycleLength = baseCycle * (1 + (Math.random()-0.5)*0.5);
+      }
+      scheduleBeat(audioCtx, time, cycleLength, finding);
+      time += cycleLength;
+      t += cycleLength;
+    }
+  }
+
+  function stopAllAudio(){
+    if (!audioCtx) return;
+    var now = audioCtx.currentTime;
+    if (masterGain){
+      masterGain.gain.cancelScheduledValues(now);
+      masterGain.gain.setValueAtTime(masterGain.gain.value, now);
+      masterGain.gain.linearRampToValueAtTime(0.0001, now+0.05);
+    }
+    scheduledNodes.forEach(function(node){
+      try{ node.stop(now+0.06); } catch(e){}
+    });
+    scheduledNodes = [];
+    setTimeout(function(){
+      if (masterGain && audioCtx){
+        masterGain.gain.cancelScheduledValues(audioCtx.currentTime);
+        masterGain.gain.setValueAtTime(currentVolume, audioCtx.currentTime);
+      }
+    }, 90);
+  }
+
+  /* ================= GAME LOGIC ================= */
+
+  function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+  function generateCase(difficultyKey){
+    var patient = pick(PATIENTS);
+    var name = pick(patient.names);
+    var bpm = Math.round(patient.minBPM + Math.random()*(patient.maxBPM-patient.minBPM));
+    var caseObj = { species:patient.species, icon:patient.icon, name:name, bpm:bpm, finding:null };
+    if (difficultyKey === 'specialist'){
+      caseObj.finding = pick(FINDING_ORDER);
+    }
+    return caseObj;
+  }
+
+  function computeAccuracy(guess, actual){
+    var diff = Math.abs(guess-actual);
+    var percentError = (diff/actual)*100;
+    var accuracy = Math.round(Math.max(0, Math.min(100, 100-percentError*2)));
+    return { diff:diff, accuracy:accuracy };
+  }
+
+  function computeXP(accuracy, difficultyKey){
+    return Math.round(accuracy * DIFFICULTIES[difficultyKey].multiplier);
+  }
+
+  function getLevel(xp){
+    var level = Math.floor(xp/LEVEL_XP)+1;
+    var progress = (xp % LEVEL_XP)/LEVEL_XP;
+    return { level:level, progress:progress };
+  }
+
+  /* ================= UI & NAVIGATION ================= */
+
+  function showScreen(id){
+    document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
+    document.getElementById(id).classList.add('active');
+  }
+
+  function updateGlobalUI(){
+    var lvl = getLevel(playerData.xp);
+    document.getElementById('level-num').textContent = lvl.level;
+    document.getElementById('level-fill').style.width = (lvl.progress * 100) + '%';
+    document.getElementById('volume-slider').value = currentVolume;
+  }
+
+  /* ================= HOME ================= */
+
+  function renderHome(){
+    var avgAcc = playerData.gamesPlayed > 0 ? Math.round(playerData.totalAccuracySum / playerData.gamesPlayed) : 0;
+    var statsHtml =
+      '<div class="stat-pill"><span class="stat-value">' + playerData.gamesPlayed + '</span><span class="stat-label">CASES</span></div>' +
+      '<div class="stat-pill"><span class="stat-value">' + avgAcc + '%</span><span class="stat-label">AVG ACC</span></div>' +
+      '<div class="stat-pill"><span class="stat-value">' + playerData.currentStreak + '</span><span class="stat-label">STREAK</span></div>' +
+      '<div class="stat-pill"><span class="stat-value">' + playerData.xp + '</span><span class="stat-label">XP</span></div>';
+    document.getElementById('home-stats').innerHTML = statsHtml;
+
+    var diffGrid = document.getElementById('difficulty-grid');
+    diffGrid.innerHTML = '';
+    DIFFICULTY_ORDER.forEach(function(k, idx){
+      var d = DIFFICULTIES[k];
+      var pd = playerData.perDifficulty[k];
+      var acc = pd.played > 0 ? Math.round(pd.accuracySum / pd.played) + '%' : '--';
+      var wClass = (idx === DIFFICULTY_ORDER.length - 1 && DIFFICULTY_ORDER.length % 2 !== 0) ? ' difficulty-card--wide' : '';
+      var html = '<div class="difficulty-card' + wClass + '" data-diff="' + k + '">' +
+        '<div class="diff-icon">' + d.icon + '</div>' +
+        '<div class="diff-name">' + d.label + '</div>' +
+        (k === 'specialist' ? '<div class="diff-subtitle">+ Pathologies</div>' : '') +
+        '<div class="diff-time">' + d.duration + 's</div>' +
+        '<div class="diff-stat">Avg: ' + acc + '</div>' +
+      '</div>';
+      diffGrid.insertAdjacentHTML('beforeend', html);
+    });
+
+    document.querySelectorAll('.difficulty-card').forEach(function(card){
+      card.addEventListener('click', function(){
+        startIntro(this.getAttribute('data-diff'));
+      });
+    });
+  }
+
+  /* ================= INTRO ================= */
+
+  function startIntro(diffKey){
+    currentDifficultyKey = diffKey;
+    currentCase = generateCase(diffKey);
+    hasSubmitted = false;
+    selectedFinding = null;
+
+    var html = '<div class="case-icon">' + currentCase.icon + '</div>' +
+      '<h2>' + currentCase.name + '</h2>' +
+      '<p class="case-species">' + currentCase.species + '</p>' +
+      '<div class="case-difficulty">' + DIFFICULTIES[diffKey].icon + ' ' + DIFFICULTIES[diffKey].label + '</div>';
+    document.getElementById('case-card').innerHTML = html;
+
+    showScreen('screen-intro');
+  }
+
+  /* ================= LISTENING ================= */
+
+  function startListening(){
+    ensureAudioContext();
+    var labelHtml = 'Listening to <strong>' + currentCase.name + '</strong> (' + currentCase.species + ')';
+    document.getElementById('listening-case-label').innerHTML = labelHtml;
+
+    document.getElementById('time-up-banner').style.display = 'none';
+    var bpmInput = document.getElementById('bpm-input');
+    bpmInput.value = '';
+    bpmInput.disabled = true; // Kept disabled during the 3-2-1 countdown
+    document.getElementById('btn-lock-guess').style.display = 'none'; 
+    document.getElementById('input-hint').textContent = '';
+
+    var findingRow = document.getElementById('finding-select-row');
+    if(currentDifficultyKey === 'specialist'){
+      findingRow.style.display = 'block';
+      renderFindingOptions();
+    } else {
+      findingRow.style.display = 'none';
+    }
+
+    drawTrace();
+    showScreen('screen-listening');
+
+    // Pre-countdown
+    var pre = document.getElementById('precountdown');
+    pre.style.display = 'flex';
+    var count = 3;
+    pre.textContent = count;
+    var preInt = setInterval(function(){
+      count--;
+      if(count > 0){ pre.textContent = count; }
+      else if(count === 0){ pre.textContent = 'GO'; }
+      else {
+        clearInterval(preInt);
+        pre.style.display = 'none';
+        runCaseAudioAndTimer();
+      }
+    }, 800);
+  }
+
+  function drawTrace(){
+    var pts = [];
+    var yBase = 50;
+    // Generate a repeating mock ECG pattern
+    for(var i=0; i<=1600; i+=4){
+       var mod = i % 180;
+       var y = yBase;
+       if(mod > 80 && mod < 90) y = yBase - 8;
+       else if(mod > 100 && mod < 105) y = yBase + 5;
+       else if(mod >= 105 && mod < 115) y = 15;
+       else if(mod >= 115 && mod < 125) y = yBase + 12;
+       else if(mod > 140 && mod < 160) y = yBase - 12;
+       else y = yBase + (Math.random()*4 - 2);
+       pts.push(i + ',' + y);
+    }
+    document.getElementById('trace-line').setAttribute('points', pts.join(' '));
+  }
+
+  function renderFindingOptions(){
+    var container = document.getElementById('finding-options');
+    container.innerHTML = '';
+    FINDING_ORDER.forEach(function(k){
+      var f = FINDINGS[k];
+      var opt = document.createElement('div');
+      opt.className = 'finding-option';
+      opt.innerHTML = '<span>' + f.icon + '</span><span>' + f.label + '</span>';
+      opt.onclick = function(){
+        document.querySelectorAll('.finding-option').forEach(function(el){ el.classList.remove('selected'); });
+        opt.classList.add('selected');
+        selectedFinding = k;
+      };
+      container.appendChild(opt);
+    });
+  }
+
+  function runCaseAudioAndTimer(){
+    var bpmInput = document.getElementById('bpm-input');
+    
+    // NEW: Enable the input field and button as soon as audio starts
+    bpmInput.disabled = false;
+    document.getElementById('btn-lock-guess').style.display = 'block';
+
+    var dur = DIFFICULTIES[currentDifficultyKey].duration;
+    var startTime = audioCtx.currentTime + 0.1;
+    scheduleHeartbeats(currentCase.bpm, dur, startTime, currentCase.finding);
+
+    var timerDisplay = document.getElementById('timer-display');
+    var progressFill = document.getElementById('progress-fill');
+    timerDisplay.classList.remove('urgent');
+
+    var startJsTime = performance.now();
+    function update(){
+      var elapsed = (performance.now() - startJsTime)/1000;
+      var rem = Math.max(0, dur - elapsed);
+      timerDisplay.textContent = rem.toFixed(1) + 's';
+      progressFill.style.width = ((rem/dur)*100) + '%';
+
+      if(rem <= 5) timerDisplay.classList.add('urgent');
+
+      if(rem > 0){
+        countdownRAF = requestAnimationFrame(update);
+      } else {
+        endListening();
+      }
+    }
+    countdownRAF = requestAnimationFrame(update);
+  }
+
+  function endListening(){
+    cancelAnimationFrame(countdownRAF);
+    stopAllAudio();
+    document.getElementById('timer-display').textContent = '0.0s';
+    document.getElementById('progress-fill').style.width = '0%';
+    document.getElementById('time-up-banner').style.display = 'block';
+
+    var bpmInput = document.getElementById('bpm-input');
+    bpmInput.disabled = false;
+    bpmInput.focus();
+    document.getElementById('btn-lock-guess').style.display = 'block';
+  }
+
+  function handleLockGuess(){
+    if(hasSubmitted) return;
+    var bpmInput = document.getElementById('bpm-input');
+    var guess = parseInt(bpmInput.value, 10);
+    
+    if(isNaN(guess) || guess < 1 || guess > 500){
+      bpmInput.classList.remove('shake');
+      void bpmInput.offsetWidth; // trigger reflow
+      bpmInput.classList.add('shake');
+      document.getElementById('input-hint').textContent = 'Enter a valid BPM';
+      return;
+    }
+    if(currentDifficultyKey === 'specialist' && !selectedFinding){
+      document.getElementById('input-hint').textContent = 'Please select a finding';
+      return;
+    }
+
+    hasSubmitted = true;
+    
+    // NEW: Stop the countdown timer and mute audio if guessing early
+    cancelAnimationFrame(countdownRAF);
+    stopAllAudio();
+    
+    processResults(guess);
+  }
+
+  /* ================= RESULTS & DATA ================= */
+
+  function processResults(guess){
+    var accData = computeAccuracy(guess, currentCase.bpm);
+    var baseXP = computeXP(accData.accuracy, currentDifficultyKey);
+    var findingCorrect = false;
+    var totalXP = baseXP;
+
+    playerData.gamesPlayed++;
+    playerData.totalAccuracySum += accData.accuracy;
+    playerData.totalAbsDiffSum += accData.diff;
+    playerData.perDifficulty[currentDifficultyKey].played++;
+    playerData.perDifficulty[currentDifficultyKey].accuracySum += accData.accuracy;
+
+    var fResultEl = document.getElementById('finding-result');
+    fResultEl.style.display = 'none';
+    fResultEl.className = 'finding-result';
+
+    if(currentDifficultyKey === 'specialist'){
+      playerData.findingStats.attempted++;
+      if(selectedFinding === currentCase.finding){
+        findingCorrect = true;
+        playerData.findingStats.correct++;
+        totalXP += FINDING_XP_BONUS;
+        fResultEl.innerHTML = '<strong>Correct Finding!</strong><br>You accurately identified: ' + FINDINGS[currentCase.finding].label + ' (+' + FINDING_XP_BONUS + ' XP)';
+        fResultEl.classList.add('correct');
+      } else {
+        fResultEl.innerHTML = '<strong>Incorrect Finding</strong><br>You selected ' + FINDINGS[selectedFinding].label + ', but it was <strong>' + FINDINGS[currentCase.finding].label + '</strong>.';
+        fResultEl.classList.add('incorrect');
+      }
+      fResultEl.style.display = 'block';
+    }
+
+    if(accData.accuracy >= STREAK_THRESHOLD){
+      playerData.currentStreak++;
+      if(playerData.currentStreak > playerData.bestStreak){
+        playerData.bestStreak = playerData.currentStreak;
+      }
+    } else {
+      playerData.currentStreak = 0;
+    }
+
+    playerData.xp += totalXP;
+    playerData.history.unshift({
+      species: currentCase.species,
+      diffKey: currentDifficultyKey,
+      accuracy: accData.accuracy,
+      guess: guess,
+      actual: currentCase.bpm,
+      findingCorrect: findingCorrect
+    });
+    if(playerData.history.length > 10) playerData.history.pop();
+
+    var earnedBadges = checkBadges(accData, findingCorrect);
+    savePlayerData(playerData);
+
+    renderResults(guess, accData, totalXP, earnedBadges);
+  }
+
+  function checkBadges(accData, findingCorrect){
+    var earned = [];
+    var b = playerData.badges;
+    function award(id){ if(b.indexOf(id)===-1){ b.push(id); earned.push(id); } }
+
+    award('first_beat');
+    if(accData.diff <= 1) award('perfect_pulse');
+    if(accData.accuracy >= 95) award('golden_ear');
+    if(playerData.currentStreak >= 5) award('on_a_roll');
+    if(playerData.currentStreak >= 10) award('iron_streak');
+    if(playerData.gamesPlayed >= 100) award('century_club');
+
+    var pdChief = playerData.perDifficulty['chief'];
+    if(currentDifficultyKey === 'chief' && accData.accuracy >= 90 && pdChief.played > 0){
+      award('speed_demon');
+    }
+
+    var allPlayed = DIFFICULTY_ORDER.every(function(k){ return playerData.perDifficulty[k].played > 0; });
+    if(allPlayed) award('well_rounded');
+
+    if(playerData.findingStats.correct >= 10) award('diagnostician');
+
+    return earned;
+  }
+
+  function renderResults(guess, accData, xpEarned, earnedBadges){
+    updateGlobalUI();
+
+    var msg = 'Good effort!';
+    var badgeIcon = '\u{1F44D}'; // Thumbs up
+    if(accData.accuracy >= 95){ msg = 'Outstanding!'; badgeIcon = '\u{1F525}'; triggerConfetti(); }
+    else if(accData.accuracy >= 85){ msg = 'Great work!'; badgeIcon = '\u{1F31F}'; }
+    else if(accData.accuracy < 50){ msg = 'Needs practice'; badgeIcon = '\u{1FA7A}'; }
+
+    document.getElementById('result-badge').textContent = badgeIcon;
+    document.getElementById('result-message').textContent = msg;
+
+    document.getElementById('result-guess').textContent = guess;
+    document.getElementById('result-actual').textContent = currentCase.bpm;
+    document.getElementById('result-diff').textContent = accData.diff;
+
+    document.getElementById('accuracy-label').textContent = accData.accuracy + '% Accuracy';
+    setTimeout(function(){
+      document.getElementById('accuracy-fill').style.width = accData.accuracy + '%';
+    }, 100);
+
+    document.getElementById('xp-gain').textContent = '+' + xpEarned + ' XP';
+
+    var streakEl = document.getElementById('streak-display');
+    if(playerData.currentStreak >= 3){
+      streakEl.textContent = '\u{1F525} ' + playerData.currentStreak + ' Streak!';
+      streakEl.style.display = 'block';
+    } else {
+      streakEl.style.display = 'none';
+    }
+
+    showScreen('screen-results');
+
+    if(earnedBadges.length > 0){
+      var delay = 500;
+      earnedBadges.forEach(function(bid){
+        setTimeout(function(){ showToast(BADGES[bid]); }, delay);
+        delay += 2500;
+      });
+    }
+  }
+
+  /* ================= STATS ================= */
+
+  function renderStats(){
+    var avgAcc = playerData.gamesPlayed > 0 ? Math.round(playerData.totalAccuracySum / playerData.gamesPlayed) : 0;
+    var avgDiff = playerData.gamesPlayed > 0 ? (playerData.totalAbsDiffSum / playerData.gamesPlayed).toFixed(1) : 0;
+
+    document.getElementById('stats-grid').innerHTML =
+      '<div class="big-stat"><span class="big-value">' + playerData.gamesPlayed + '</span><span>Cases</span></div>' +
+      '<div class="big-stat"><span class="big-value">' + avgAcc + '%</span><span>Avg Acc</span></div>' +
+      '<div class="diff-stat-row"><span>Best Streak</span><span style="font-family:var(--font-mono);font-weight:700;">' + playerData.bestStreak + '</span></div>' +
+      '<div class="diff-stat-row"><span>Avg Off By</span><span style="font-family:var(--font-mono);font-weight:700;">' + avgDiff + ' BPM</span></div>';
+
+    var trendChart = document.getElementById('trend-chart');
+    trendChart.innerHTML = '';
+    if(playerData.history.length === 0){
+      trendChart.innerHTML = '<div class="empty-state">No data yet</div>';
+    } else {
+      var chartHist = playerData.history.slice(0,10).reverse();
+      chartHist.forEach(function(h){
+        var bar = document.createElement('div');
+        bar.className = 'trend-bar';
+        bar.style.height = Math.max(3, h.accuracy) + '%';
+        bar.style.background = h.accuracy >= STREAK_THRESHOLD ? 'var(--trace-green)' : 'var(--amber-warn)';
+        trendChart.appendChild(bar);
+      });
+    }
+
+    var historyList = document.getElementById('history-list');
+    historyList.innerHTML = '';
+    if(playerData.history.length === 0){
+      historyList.innerHTML = '<div class="empty-state">No cases played</div>';
+    } else {
+      playerData.history.slice(0,5).forEach(function(h){
+        var html = '<div class="history-row">' +
+          '<span class="history-who">' + h.species + ' (' + DIFFICULTIES[h.diffKey].icon + ')</span>' +
+          '<span class="history-accuracy" style="color:' + (h.accuracy>=STREAK_THRESHOLD?'var(--trace-green)':'var(--pulse-coral)') + '">' + h.accuracy + '%</span>' +
+        '</div>';
+        historyList.insertAdjacentHTML('beforeend', html);
+      });
+    }
+
+    var badgesGrid = document.getElementById('badges-grid');
+    badgesGrid.innerHTML = '';
+    BADGE_ORDER.forEach(function(bid){
+      var b = BADGES[bid];
+      var has = playerData.badges.indexOf(bid) > -1;
+      var html = '<div class="badge-cell ' + (has?'':'locked') + '">' +
+        '<div class="badge-icon">' + b.icon + '</div>' +
+        '<div class="badge-name">' + b.name + '</div>' +
+        '<div class="badge-desc">' + b.desc + '</div>' +
+      '</div>';
+      badgesGrid.insertAdjacentHTML('beforeend', html);
+    });
+  }
+
+  /* ================= EFFECTS & UTILS ================= */
+
+  function showToast(badge){
+    var t = document.getElementById('badge-toast');
+    t.innerHTML = '<div class="toast-icon">' + badge.icon + '</div>' +
+      '<div><div style="font-weight:700;font-size:0.8rem;margin-bottom:2px;color:var(--amber-warn)">Badge Unlocked!</div>' +
+      '<div class="toast-text">' + badge.name + '</div></div>';
+    t.classList.add('show');
+    setTimeout(function(){ t.classList.remove('show'); }, 3000);
+  }
+
+  function triggerConfetti(){
+    var c = document.createElement('div');
+    c.className = 'confetti-container';
+    for(var i=0; i<40; i++){
+      var p = document.createElement('div');
+      p.className = 'confetti-piece';
+      p.style.left = Math.random() * 100 + '%';
+      p.style.backgroundColor = pick(['#3ddc84','#ff6b6b','#ffb84d','#e7edf0','#3ddc84']);
+      p.style.animationDelay = (Math.random() * 0.4) + 's';
+      c.appendChild(p);
+    }
+    document.body.appendChild(c);
+    setTimeout(function(){ c.remove(); }, 2000);
+  }
+
+  /* ================= INIT & EVENTS ================= */
+
+  function initApp(){
+    // LocalStorage fallback mock if a native window.storage wrapper isn't present
+    if(!window.storage){
+      window.storage = {
+        get: function(k){ return Promise.resolve({ value: localStorage.getItem(k) }); },
+        set: function(k,v){ localStorage.setItem(k,v); return Promise.resolve(); }
+      };
+    }
+
+    loadPlayerData().then(function(data){
+      playerData = data;
+      currentVolume = playerData.volume !== undefined ? playerData.volume : 0.7;
+      updateGlobalUI();
+      renderHome();
+      showScreen('screen-home');
+    });
+
+    // Wire up events
+    document.getElementById('volume-slider').addEventListener('input', function(e){
+      currentVolume = parseFloat(e.target.value);
+      if(masterGain) masterGain.gain.value = currentVolume;
+      playerData.volume = currentVolume;
+      clearTimeout(volumeSaveTimeout);
+      volumeSaveTimeout = setTimeout(function(){ savePlayerData(playerData); }, 500);
+    });
+
+    document.getElementById('btn-view-stats').addEventListener('click', function(){
+      renderStats();
+      showScreen('screen-stats');
+    });
+
+    document.getElementById('btn-intro-back').addEventListener('click', function(){
+      renderHome();
+      showScreen('screen-home');
+    });
+
+    document.getElementById('btn-start-listening').addEventListener('click', function(){
+      startListening();
+    });
+
+    document.getElementById('btn-lock-guess').addEventListener('click', handleLockGuess);
+
+    document.getElementById('btn-next-round').addEventListener('click', function(){
+      document.getElementById('accuracy-fill').style.width = '0%';
+      startIntro(currentDifficultyKey);
+    });
+
+    document.getElementById('btn-change-difficulty').addEventListener('click', function(){
+      document.getElementById('accuracy-fill').style.width = '0%';
+      renderHome();
+      showScreen('screen-home');
+    });
+
+    document.getElementById('btn-back-home').addEventListener('click', function(){
+      renderHome();
+      showScreen('screen-home');
+    });
+  }
+
+  // Boot the app when ready
+  document.addEventListener('DOMContentLoaded', initApp);
+
+})();
+</script>
+</body>
+</html>
