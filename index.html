@@ -519,7 +519,7 @@
     <div class="difficulty-grid" id="difficulty-grid"></div>
 
     <button class="btn-ghost" id="btn-view-stats">View full stats</button>
-    <p class="footer-note">Species BPM ranges and pathological sounds are illustrative training approximations, not clinical reference values.</p>
+    <p class="footer-note">Species BPM ranges, pathological sounds, and ECG patterns are illustrative training approximations based on general veterinary/human cardiology references — not clinical reference values for diagnosis.</p>
   </section>
 
   <!-- CASE INTRO -->
@@ -556,7 +556,7 @@
     </div>
 
     <div class="finding-select-row" id="finding-select-row" style="display:none;">
-      <label>What do you hear?</label>
+      <label id="finding-select-label">What do you hear?</label>
       <div class="finding-options" id="finding-options"></div>
     </div>
 
@@ -621,13 +621,14 @@
   /* ================= CONSTANTS ================= */
 
   var DIFFICULTIES = {
-    intern:     { label:'Intern',            duration:120, multiplier:1.0, icon:'\u{1F393}' },
-    associate:  { label:'Associate Vet',     duration:45,  multiplier:1.3, icon:'\u{1FA7A}' },
-    senior:     { label:'Senior Clinician',  duration:20,  multiplier:1.7, icon:'\u2695\uFE0F' },
-    chief:      { label:'Chief of Medicine', duration:10,  multiplier:2.2, icon:'\u{1F3C6}' },
-    specialist: { label:'Specialist',        duration:15,  multiplier:2.6, icon:'\u{1F52C}' }
+    intern:      { label:'Intern',            duration:120, multiplier:1.0, icon:'\u{1F393}' },
+    associate:   { label:'Associate Vet',     duration:45,  multiplier:1.3, icon:'\u{1FA7A}' },
+    senior:      { label:'Senior Clinician',  duration:20,  multiplier:1.7, icon:'\u2695\uFE0F' },
+    chief:       { label:'Chief of Medicine', duration:10,  multiplier:2.2, icon:'\u{1F3C6}' },
+    specialist:  { label:'Specialist',        duration:15,  multiplier:2.6, icon:'\u{1F52C}' },
+    electrolyte: { label:'Criticalist',       duration:18,  multiplier:2.8, icon:'\u{1F9EA}' }
   };
-  var DIFFICULTY_ORDER = ['intern','associate','senior','chief','specialist'];
+  var DIFFICULTY_ORDER = ['intern','associate','senior','chief','specialist','electrolyte'];
 
   var FINDINGS = {
     normal:           { label:'Normal sinus rhythm',           icon:'\u2705' },
@@ -638,6 +639,72 @@
   };
   var FINDING_ORDER = ['normal','systolic_murmur','diastolic_murmur','gallop','arrhythmia'];
   var FINDING_XP_BONUS = 50;
+
+  // Electrolyte states available in the Criticalist tier. ECG signatures below are
+  // simplified/stylized composites of the well-established teaching findings for each
+  // state (see chat for sourcing: LITFL, EMCrit/IBCC, Permanente Journal, Merck Vet Manual,
+  // and feline urethral-obstruction / canine eclampsia literature).
+  var ELECTROLYTES = {
+    normal:        { label:'Normal (no abnormality)',           icon:'\u2705' },
+    hyperkalemia:  { label:'Hyperkalemia (high K\u207A)',        icon:'\u{1F53A}' },
+    hypokalemia:   { label:'Hypokalemia (low K\u207A)',          icon:'\u{1F53B}' },
+    hypercalcemia: { label:'Hypercalcemia (high Ca\u00B2\u207A)', icon:'\u2B06\uFE0F' },
+    hypocalcemia:  { label:'Hypocalcemia (low Ca\u00B2\u207A)',  icon:'\u2B07\uFE0F' }
+  };
+  var ELECTROLYTE_ORDER = ['normal','hyperkalemia','hypokalemia','hypercalcemia','hypocalcemia'];
+
+  // Parametric PQRST shape per state. Durations are in seconds (nominal, pre-rate-scaling);
+  // p/qrs/t peak values and st/level are SVG y-coordinates (baseline = 50, smaller y = taller
+  // upward deflection, larger y = deeper downward deflection, viewBox height = 100).
+  var ECG_PROFILES = {
+    normal: {
+      p:  { dur:0.05, peak:42 },
+      pr: { dur:0.03 },
+      qrs:{ dur:0.06, q:54, r:10, s:57, osborn:false },
+      st: { dur:0.06, level:50 },
+      t:  { dur:0.10, peak:33 },
+      u:  null
+    },
+    // Hyperkalemia: tall narrow "tented" T, flattened/near-absent P, prolonged PR,
+    // widened+slurred QRS. Bradycardic bias applied at generation (see biasedBpmForElectrolyte).
+    hyperkalemia: {
+      p:  { dur:0.05, peak:48 },
+      pr: { dur:0.07 },
+      qrs:{ dur:0.14, q:53, r:16, s:55, osborn:false },
+      st: { dur:0.03, level:50 },
+      t:  { dur:0.05, peak:18 },
+      u:  null
+    },
+    // Hypokalemia: flattened T, mild ST depression, prominent U wave after the T.
+    hypokalemia: {
+      p:  { dur:0.05, peak:39 },
+      pr: { dur:0.04 },
+      qrs:{ dur:0.06, q:54, r:10, s:57, osborn:false },
+      st: { dur:0.06, level:53 },
+      t:  { dur:0.06, peak:47 },
+      u:  { dur:0.07, peak:43 }
+    },
+    // Hypercalcemia: shortened/absent ST segment (short QT), small Osborn/J notch,
+    // T wave shape otherwise normal. Mild bradycardic bias applied at generation.
+    hypercalcemia: {
+      p:  { dur:0.05, peak:42 },
+      pr: { dur:0.03 },
+      qrs:{ dur:0.06, q:54, r:10, s:57, osborn:true },
+      st: { dur:0.015, level:50 },
+      t:  { dur:0.10, peak:33 },
+      u:  null
+    },
+    // Hypocalcemia: lengthened ST segment (long QT), T wave shape stays normal (this is
+    // what distinguishes it visually from hypokalemia's flattened T).
+    hypocalcemia: {
+      p:  { dur:0.05, peak:42 },
+      pr: { dur:0.03 },
+      qrs:{ dur:0.06, q:54, r:10, s:57, osborn:false },
+      st: { dur:0.18, level:50 },
+      t:  { dur:0.10, peak:33 },
+      u:  null
+    }
+  };
 
   var PATIENTS = [
     { species:'Chihuahua',      icon:'\u{1F415}', minBPM:100, maxBPM:160, names:['Bella','Peanut','Coco','Chico'] },
@@ -659,9 +726,10 @@
     century_club: { name:'Century Club',  icon:'\u{1F4AF}', desc:'Played 100 rounds' },
     speed_demon:  { name:'Speed Demon',   icon:'\u{1F680}', desc:'90%+ at Chief difficulty' },
     well_rounded: { name:'Well-Rounded',  icon:'\u{1F31F}', desc:'Played every difficulty' },
-    diagnostician:{ name:'Diagnostician', icon:'\u{1F9E0}', desc:'Correctly ID 10 pathological findings' }
+    diagnostician:{ name:'Diagnostician', icon:'\u{1F9E0}', desc:'Correctly ID 10 pathological findings' },
+    ecg_reader:   { name:'ECG Whisperer', icon:'\u{1F4C8}', desc:'Correctly ID 10 electrolyte abnormalities' }
   };
-  var BADGE_ORDER = ['first_beat','perfect_pulse','golden_ear','on_a_roll','iron_streak','century_club','speed_demon','well_rounded','diagnostician'];
+  var BADGE_ORDER = ['first_beat','perfect_pulse','golden_ear','on_a_roll','iron_streak','century_club','speed_demon','well_rounded','diagnostician','ecg_reader'];
 
   var STORAGE_KEY = 'pulsecheck-player-data-v1';
   var LEVEL_XP = 300;
@@ -702,7 +770,8 @@
       badges:[],
       history:[],
       perDifficulty:perDifficulty,
-      findingStats:{ attempted:0, correct:0 }
+      findingStats:{ attempted:0, correct:0 },
+      electrolyteStats:{ attempted:0, correct:0 }
     };
   }
 
@@ -715,6 +784,7 @@
           var merged = Object.assign({}, defaults, parsed);
           merged.perDifficulty = Object.assign({}, defaults.perDifficulty, parsed.perDifficulty||{});
           merged.findingStats = Object.assign({}, defaults.findingStats, parsed.findingStats||{});
+          merged.electrolyteStats = Object.assign({}, defaults.electrolyteStats, parsed.electrolyteStats||{});
           return merged;
         } catch(e){ return defaults; }
       }
@@ -878,15 +948,39 @@
 
   function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
 
-  function generateCase(difficultyKey){
+  function generateCase(){
     var patient = pick(PATIENTS);
     var name = pick(patient.names);
     var bpm = Math.round(patient.minBPM + Math.random()*(patient.maxBPM-patient.minBPM));
-    var caseObj = { species:patient.species, icon:patient.icon, name:name, bpm:bpm, finding:null };
-    if (difficultyKey === 'specialist'){
-      caseObj.finding = pick(FINDING_ORDER);
+    var finding = pick(FINDING_ORDER);
+    return { species:patient.species, icon:patient.icon, name:name, bpm:bpm, finding:finding, electrolyte:null };
+  }
+
+  // Hyperkalemia and (less markedly) hypercalcemia are associated with bradycardia
+  // clinically (e.g. cats with hyperkalemia from urethral obstruction commonly run
+  // <140bpm); hypokalemia and hypocalcemia don't have a strong single-direction rate
+  // signature, so their BPM is left at the species' normal range and the ECG carries
+  // the diagnostic signal instead.
+  function biasedBpmForElectrolyte(patient, electrolyteKey){
+    var lo = patient.minBPM, hi = patient.maxBPM, range = hi - lo;
+    if (electrolyteKey === 'hyperkalemia'){
+      var kLo = Math.max(1, Math.round(lo - range*0.15));
+      var kHi = Math.round(lo + range*0.30);
+      return Math.round(kLo + Math.random()*(kHi-kLo));
     }
-    return caseObj;
+    if (electrolyteKey === 'hypercalcemia'){
+      var caHi = Math.round(lo + range*0.45);
+      return Math.round(lo + Math.random()*(caHi-lo));
+    }
+    return Math.round(lo + Math.random()*range);
+  }
+
+  function generateElectrolyteCase(){
+    var patient = pick(PATIENTS);
+    var name = pick(patient.names);
+    var electrolyte = pick(ELECTROLYTE_ORDER);
+    var bpm = biasedBpmForElectrolyte(patient, electrolyte);
+    return { species:patient.species, icon:patient.icon, name:name, bpm:bpm, finding:null, electrolyte:electrolyte };
   }
 
   function computeAccuracy(guess, actual){
@@ -938,10 +1032,13 @@
       var pd = playerData.perDifficulty[k];
       var acc = pd.played > 0 ? Math.round(pd.accuracySum / pd.played) + '%' : '--';
       var wClass = (idx === DIFFICULTY_ORDER.length - 1 && DIFFICULTY_ORDER.length % 2 !== 0) ? ' difficulty-card--wide' : '';
+      var subtitle = (k === 'electrolyte')
+        ? '<div class="diff-subtitle">BPM + ECG read</div>'
+        : '<div class="diff-subtitle">BPM + diagnosis</div>';
       var html = '<div class="difficulty-card' + wClass + '" data-diff="' + k + '">' +
         '<div class="diff-icon">' + d.icon + '</div>' +
         '<div class="diff-name">' + d.label + '</div>' +
-        (k === 'specialist' ? '<div class="diff-subtitle">+ Pathologies</div>' : '') +
+        subtitle +
         '<div class="diff-time">' + d.duration + 's</div>' +
         '<div class="diff-stat">Avg: ' + acc + '</div>' +
       '</div>';
@@ -959,7 +1056,7 @@
 
   function startIntro(diffKey){
     currentDifficultyKey = diffKey;
-    currentCase = generateCase(diffKey);
+    currentCase = (diffKey === 'electrolyte') ? generateElectrolyteCase() : generateCase();
     hasSubmitted = false;
     selectedFinding = null;
 
@@ -987,11 +1084,14 @@
     document.getElementById('input-hint').textContent = '';
 
     var findingRow = document.getElementById('finding-select-row');
-    if(currentDifficultyKey === 'specialist'){
-      findingRow.style.display = 'block';
-      renderFindingOptions();
+    var findingLabel = document.getElementById('finding-select-label');
+    findingRow.style.display = 'block';
+    if (currentDifficultyKey === 'electrolyte'){
+      findingLabel.textContent = 'What does the ECG show?';
+      renderFindingOptions(ELECTROLYTE_ORDER, ELECTROLYTES);
     } else {
-      findingRow.style.display = 'none';
+      findingLabel.textContent = 'What do you hear?';
+      renderFindingOptions(FINDING_ORDER, FINDINGS);
     }
 
     drawTrace();
@@ -1014,29 +1114,120 @@
     }, 800);
   }
 
-  function drawTrace(){
+  /* ---- Parametric ECG engine ----
+     Builds one beat's PQRST as [timeSeconds, y] points from an ECG_PROFILES entry, then
+     tiles beats into a seamlessly-looping polyline whose scroll speed is set (via
+     syncTraceAnimation) to match the case's actual BPM — so the trace is no longer
+     decorative, it visually shows the same tempo you're hearing. */
+
+  function buildBeatWave(profile, cycleSeconds){
+    var baseline = 50;
+    var nominal = profile.p.dur + profile.pr.dur + profile.qrs.dur + profile.st.dur + profile.t.dur + (profile.u ? profile.u.dur : 0);
+    var maxActive = cycleSeconds * 0.82; // keep at least ~18% of the cycle as flat baseline/diastole
+    var scale = nominal > maxActive ? (maxActive / nominal) : 1;
+
+    var pDur = profile.p.dur*scale, prDur = profile.pr.dur*scale, qrsDur = profile.qrs.dur*scale,
+        stDur = profile.st.dur*scale, tDur = profile.t.dur*scale, uDur = profile.u ? profile.u.dur*scale : 0;
+
     var pts = [];
-    var yBase = 50;
-    // Generate a repeating mock ECG pattern
-    for(var i=0; i<=1600; i+=4){
-       var mod = i % 180;
-       var y = yBase;
-       if(mod > 80 && mod < 90) y = yBase - 8;
-       else if(mod > 100 && mod < 105) y = yBase + 5;
-       else if(mod >= 105 && mod < 115) y = 15;
-       else if(mod >= 115 && mod < 125) y = yBase + 12;
-       else if(mod > 140 && mod < 160) y = yBase - 12;
-       else y = yBase + (Math.random()*4 - 2);
-       pts.push(i + ',' + y);
+    var t = 0.01*scale;
+    pts.push([t, baseline]);
+    pts.push([t + pDur*0.5, profile.p.peak]);
+    t += pDur;
+    pts.push([t, baseline]);
+    t += prDur;
+    pts.push([t, baseline]);
+    pts.push([t + qrsDur*0.25, profile.qrs.q]);
+    pts.push([t + qrsDur*0.55, profile.qrs.r]);
+    pts.push([t + qrsDur*0.8, profile.qrs.s]);
+    t += qrsDur;
+    if (profile.qrs.osborn){
+      pts.push([t, 45]); // small Osborn/J notch at the QRS-ST junction
+      t += 0.01*scale;
     }
-    document.getElementById('trace-line').setAttribute('points', pts.join(' '));
+    pts.push([t, profile.st.level]);
+    t += stDur;
+    pts.push([t, profile.st.level]);
+    pts.push([t + tDur*0.5, profile.t.peak]);
+    t += tDur;
+    pts.push([t, baseline]);
+    if (profile.u){
+      pts.push([t + uDur*0.5, profile.u.peak]);
+      t += uDur;
+      pts.push([t, baseline]);
+    }
+    return pts;
   }
 
-  function renderFindingOptions(){
+  function buildTracePoints(bpm, shapeKey, jitterEnabled){
+    var profile = ECG_PROFILES[shapeKey] || ECG_PROFILES.normal;
+    var cycleSeconds = 60/bpm;
+    var beatsPerHalf = 4;
+    var nominalBeatWidth = 100; // viewBox units
+    var halfWidthTarget = beatsPerHalf * nominalBeatWidth;
+
+    var widths = [];
+    var i;
+    for (i=0;i<beatsPerHalf;i++){
+      var w = nominalBeatWidth;
+      if (jitterEnabled){
+        w = nominalBeatWidth * (1 + (Math.random()-0.5)*0.5); // matches audio arrhythmia jitter range
+      }
+      widths.push(w);
+    }
+    var rawHalfWidth = widths.reduce(function(a,b){ return a+b; }, 0);
+    var scaleX = halfWidthTarget / rawHalfWidth;
+
+    var halfPoints = [];
+    var xCursor = 0;
+    for (i=0;i<beatsPerHalf;i++){
+      var beatWidthScaled = widths[i]*scaleX;
+      var wave = buildBeatWave(profile, cycleSeconds);
+      wave.forEach(function(p){
+        var xFrac = Math.min(p[0]/cycleSeconds, 1);
+        var x = xCursor + xFrac*beatWidthScaled;
+        halfPoints.push(x.toFixed(2) + ',' + p[1].toFixed(1));
+      });
+      halfPoints.push((xCursor+beatWidthScaled).toFixed(2) + ',50.0');
+      xCursor += beatWidthScaled;
+    }
+
+    // Second half is an exact copy of the first (offset by halfWidthTarget), so the
+    // CSS -50% scroll always lands on an identical frame regardless of jitter.
+    var fullPoints = halfPoints.slice();
+    halfPoints.forEach(function(ptStr){
+      var parts = ptStr.split(',');
+      var x = parseFloat(parts[0]) + halfWidthTarget;
+      fullPoints.push(x.toFixed(2) + ',' + parts[1]);
+    });
+    return fullPoints.join(' ');
+  }
+
+  function syncTraceAnimation(bpm){
+    var el = document.querySelector('.monitor-trace');
+    if (!el) return;
+    var duration = 4 * (60/bpm); // 4 beats = one half-width = the -50% scroll distance
+    el.style.animation = 'none';
+    void el.offsetWidth; // force reflow so the restart is picked up
+    el.style.animation = 'traceScroll ' + duration.toFixed(3) + 's linear infinite';
+  }
+
+  function drawTrace(){
+    var isElectrolyte = currentDifficultyKey === 'electrolyte';
+    var shapeKey = isElectrolyte ? (currentCase.electrolyte || 'normal') : 'normal';
+    // Murmurs/gallops don't alter the ECG (they're auscultatory, not electrical) so those
+    // tiers always render a normal PQRST shape; arrhythmia shows up as irregular spacing.
+    var jitter = (!isElectrolyte) && currentCase.finding === 'arrhythmia';
+    var points = buildTracePoints(currentCase.bpm, shapeKey, jitter);
+    document.getElementById('trace-line').setAttribute('points', points);
+    syncTraceAnimation(currentCase.bpm);
+  }
+
+  function renderFindingOptions(orderList, dataMap){
     var container = document.getElementById('finding-options');
     container.innerHTML = '';
-    FINDING_ORDER.forEach(function(k){
-      var f = FINDINGS[k];
+    orderList.forEach(function(k){
+      var f = dataMap[k];
       var opt = document.createElement('div');
       opt.className = 'finding-option';
       opt.innerHTML = '<span>' + f.icon + '</span><span>' + f.label + '</span>';
@@ -1107,8 +1298,8 @@
       document.getElementById('input-hint').textContent = 'Enter a valid BPM';
       return;
     }
-    if(currentDifficultyKey === 'specialist' && !selectedFinding){
-      document.getElementById('input-hint').textContent = 'Please select a finding';
+    if(!selectedFinding){
+      document.getElementById('input-hint').textContent = currentDifficultyKey === 'electrolyte' ? 'Please select an ECG finding' : 'Please select a finding';
       return;
     }
 
@@ -1126,7 +1317,10 @@
   function processResults(guess){
     var accData = computeAccuracy(guess, currentCase.bpm);
     var baseXP = computeXP(accData.accuracy, currentDifficultyKey);
-    var findingCorrect = false;
+    var isElectrolyte = currentDifficultyKey === 'electrolyte';
+    var targetKey = isElectrolyte ? currentCase.electrolyte : currentCase.finding;
+    var dataMap = isElectrolyte ? ELECTROLYTES : FINDINGS;
+    var findingCorrect = (selectedFinding === targetKey);
     var totalXP = baseXP;
 
     playerData.gamesPlayed++;
@@ -1136,25 +1330,23 @@
     playerData.perDifficulty[currentDifficultyKey].accuracySum += accData.accuracy;
 
     var fResultEl = document.getElementById('finding-result');
-    fResultEl.style.display = 'none';
     fResultEl.className = 'finding-result';
 
-    if(currentDifficultyKey === 'specialist'){
-      playerData.findingStats.attempted++;
-      if(selectedFinding === currentCase.finding){
-        findingCorrect = true;
-        playerData.findingStats.correct++;
-        totalXP += FINDING_XP_BONUS;
-        fResultEl.innerHTML = '<strong>Correct Finding!</strong><br>You accurately identified: ' + FINDINGS[currentCase.finding].label + ' (+' + FINDING_XP_BONUS + ' XP)';
-        fResultEl.classList.add('correct');
-      } else {
-        fResultEl.innerHTML = '<strong>Incorrect Finding</strong><br>You selected ' + FINDINGS[selectedFinding].label + ', but it was <strong>' + FINDINGS[currentCase.finding].label + '</strong>.';
-        fResultEl.classList.add('incorrect');
-      }
-      fResultEl.style.display = 'block';
+    var statsBucket = isElectrolyte ? playerData.electrolyteStats : playerData.findingStats;
+    statsBucket.attempted++;
+    if(findingCorrect){
+      statsBucket.correct++;
+      totalXP += FINDING_XP_BONUS;
+      fResultEl.innerHTML = '<strong>Correct' + (isElectrolyte ? ' diagnosis' : ' finding') + '!</strong><br>' + dataMap[targetKey].label + ' (+' + FINDING_XP_BONUS + ' XP)';
+      fResultEl.classList.add('correct');
+    } else {
+      var guessedLabel = (selectedFinding && dataMap[selectedFinding]) ? dataMap[selectedFinding].label : '\u2014';
+      fResultEl.innerHTML = '<strong>Not quite</strong><br>You selected ' + guessedLabel + ', but it was <strong>' + dataMap[targetKey].label + '</strong>.';
+      fResultEl.classList.add('incorrect');
     }
+    fResultEl.style.display = 'block';
 
-    if(accData.accuracy >= STREAK_THRESHOLD){
+    if(accData.accuracy >= STREAK_THRESHOLD && findingCorrect){
       playerData.currentStreak++;
       if(playerData.currentStreak > playerData.bestStreak){
         playerData.bestStreak = playerData.currentStreak;
@@ -1177,7 +1369,7 @@
     var earnedBadges = checkBadges(accData, findingCorrect);
     savePlayerData(playerData);
 
-    renderResults(guess, accData, totalXP, earnedBadges);
+    renderResults(guess, accData, totalXP, earnedBadges, findingCorrect);
   }
 
   function checkBadges(accData, findingCorrect){
@@ -1201,16 +1393,17 @@
     if(allPlayed) award('well_rounded');
 
     if(playerData.findingStats.correct >= 10) award('diagnostician');
+    if(playerData.electrolyteStats.correct >= 10) award('ecg_reader');
 
     return earned;
   }
 
-  function renderResults(guess, accData, xpEarned, earnedBadges){
+  function renderResults(guess, accData, xpEarned, earnedBadges, findingCorrect){
     updateGlobalUI();
 
     var msg = 'Good effort!';
     var badgeIcon = '\u{1F44D}'; // Thumbs up
-    if(accData.accuracy >= 95){ msg = 'Outstanding!'; badgeIcon = '\u{1F525}'; triggerConfetti(); }
+    if(accData.accuracy >= 95){ msg = 'Outstanding!'; badgeIcon = '\u{1F525}'; if(findingCorrect) triggerConfetti(); }
     else if(accData.accuracy >= 85){ msg = 'Great work!'; badgeIcon = '\u{1F31F}'; }
     else if(accData.accuracy < 50){ msg = 'Needs practice'; badgeIcon = '\u{1FA7A}'; }
 
@@ -1253,11 +1446,16 @@
     var avgAcc = playerData.gamesPlayed > 0 ? Math.round(playerData.totalAccuracySum / playerData.gamesPlayed) : 0;
     var avgDiff = playerData.gamesPlayed > 0 ? (playerData.totalAbsDiffSum / playerData.gamesPlayed).toFixed(1) : 0;
 
+    var findingPct = playerData.findingStats.attempted > 0 ? Math.round(playerData.findingStats.correct/playerData.findingStats.attempted*100)+'%' : '--';
+    var electrolytePct = playerData.electrolyteStats.attempted > 0 ? Math.round(playerData.electrolyteStats.correct/playerData.electrolyteStats.attempted*100)+'%' : '--';
+
     document.getElementById('stats-grid').innerHTML =
       '<div class="big-stat"><span class="big-value">' + playerData.gamesPlayed + '</span><span>Cases</span></div>' +
       '<div class="big-stat"><span class="big-value">' + avgAcc + '%</span><span>Avg Acc</span></div>' +
       '<div class="diff-stat-row"><span>Best Streak</span><span style="font-family:var(--font-mono);font-weight:700;">' + playerData.bestStreak + '</span></div>' +
-      '<div class="diff-stat-row"><span>Avg Off By</span><span style="font-family:var(--font-mono);font-weight:700;">' + avgDiff + ' BPM</span></div>';
+      '<div class="diff-stat-row"><span>Avg Off By</span><span style="font-family:var(--font-mono);font-weight:700;">' + avgDiff + ' BPM</span></div>' +
+      '<div class="diff-stat-row"><span>Murmur/Rhythm Dx</span><span style="font-family:var(--font-mono);font-weight:700;">' + findingPct + '</span></div>' +
+      '<div class="diff-stat-row"><span>Electrolyte Dx</span><span style="font-family:var(--font-mono);font-weight:700;">' + electrolytePct + '</span></div>';
 
     var trendChart = document.getElementById('trend-chart');
     trendChart.innerHTML = '';
